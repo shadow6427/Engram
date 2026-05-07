@@ -203,27 +203,45 @@ class QdrantStore(VectorStore):
     ) -> list[dict]:
         from qdrant_client.models import Filter, FieldCondition, MatchValue
 
-        qdrant_filter = None
-        conditions = []
-        if namespace != _PUBLIC_NS:
-            conditions.append(FieldCondition(key="namespace", match=MatchValue(value=namespace)))
+        conditions = [
+            FieldCondition(key="_ns", match=MatchValue(value=namespace)),
+        ]
         if filter:
             for k, v in filter.items():
                 conditions.append(FieldCondition(key=k, match=MatchValue(value=str(v))))
-        if conditions:
-            qdrant_filter = Filter(must=conditions)
+        qdrant_filter = Filter(must=conditions)
 
-        results, _ = self._client.scroll(
-            collection_name=self._collection,
-            scroll_filter=qdrant_filter,
-            limit=limit,
-            offset=offset,
-            with_payload=True,
-            with_vectors=False,
-        )
+        # VectorStore.list(offset=N) means "skip N records". Qdrant's scroll
+        # offset is a point-ID cursor, so page through until we have enough rows.
+        target_count = offset + limit
+        fetched = []
+        scroll_offset = None
+
+        while len(fetched) < target_count:
+            page_limit = max(1, min(256, target_count - len(fetched)))
+            results, scroll_offset = self._client.scroll(
+                collection_name=self._collection,
+                scroll_filter=qdrant_filter,
+                limit=page_limit,
+                offset=scroll_offset,
+                with_payload=True,
+                with_vectors=False,
+            )
+            fetched.extend(results)
+            if scroll_offset is None or not results:
+                break
+
+        page = fetched[offset: offset + limit]
         return [
-            {"cid": r.payload.get("cid", ""), "metadata": r.payload.get("metadata", {})}
-            for r in results
+            {
+                "cid": (r.payload or {}).get("cid", ""),
+                "metadata": {
+                    k: v
+                    for k, v in (r.payload or {}).items()
+                    if k not in ("cid", "_ns")
+                },
+            }
+            for r in page
         ]
 
 
