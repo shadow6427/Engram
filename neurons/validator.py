@@ -327,6 +327,7 @@ async def run() -> None:
                                 "cid": challenge.cid,
                                 "nonce_hex": challenge.nonce_hex,
                                 "expires_at": challenge.expires_at,
+                                "validator_hotkey_hex": challenge.validator_hotkey_hex,
                             }
                             challenge_payload = sign_request(_keypair, "ChallengeSynapse", _base_challenge)
 

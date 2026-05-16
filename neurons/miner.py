@@ -53,23 +53,31 @@ setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 
 
 # ── Storage proof helpers ─────────────────────────────────────────────────────
-# Mirrors Rust proof.rs logic exactly: SHA-256 over little-endian f32 bytes,
-# then HMAC-SHA256 with nonce as key and embedding_hash hex as message.
+# Mirrors Rust proof.rs logic exactly:
+#   embedding_hash = SHA-256(little-endian f32 bytes)
+#   hmac_key       = SHA-256(validator_hotkey_bytes || nonce_bytes)
+#   proof          = HMAC-SHA256(key=hmac_key, msg=embedding_hash_hex)
 
 def _hash_embedding(embedding: list[float]) -> str:
     emb_bytes = struct.pack(f"<{len(embedding)}f", *embedding)
     return hashlib.sha256(emb_bytes).hexdigest()
 
 
-def _compute_proof(nonce: bytes, embedding_hash: str) -> str:
-    mac = _hmac.new(nonce, embedding_hash.encode(), hashlib.sha256)
+def _derive_hmac_key(validator_hotkey_hex: str, nonce: bytes) -> bytes:
+    hotkey_bytes = bytes.fromhex(validator_hotkey_hex) if validator_hotkey_hex else b"\x00" * 32
+    return hashlib.sha256(hotkey_bytes + nonce).digest()
+
+
+def _compute_proof(hmac_key: bytes, embedding_hash: str) -> str:
+    mac = _hmac.new(hmac_key, embedding_hash.encode(), hashlib.sha256)
     return mac.hexdigest()
 
 
-def _proof_response(nonce_hex: str, embedding: list[float]) -> tuple[str, str]:
+def _proof_response(nonce_hex: str, embedding: list[float], validator_hotkey_hex: str = "") -> tuple[str, str]:
     nonce = bytes.fromhex(nonce_hex)
     embedding_hash = _hash_embedding(embedding)
-    proof = _compute_proof(nonce, embedding_hash)
+    hmac_key = _derive_hmac_key(validator_hotkey_hex, nonce)
+    proof = _compute_proof(hmac_key, embedding_hash)
     return embedding_hash, proof
 
 
@@ -667,9 +675,10 @@ async def run() -> None:
             except ValueError as exc:
                 return web.json_response({"error": str(exc)}, status=429)
 
-            cid        = body.get("cid", "")
-            nonce_hex  = body.get("nonce_hex", "")
-            expires_at = int(body.get("expires_at", 0))
+            cid                  = body.get("cid", "")
+            nonce_hex            = body.get("nonce_hex", "")
+            expires_at           = int(body.get("expires_at", 0))
+            validator_hotkey_hex = body.get("validator_hotkey_hex", "")
 
             if time.time() > expires_at:
                 return web.json_response({"error": "This challenge has expired — the validator will issue a fresh one shortly."}, status=400)
@@ -678,7 +687,7 @@ async def run() -> None:
             if record is None:
                 return web.json_response({"error": f"Nothing stored under that CID ({cid[:20]}…). This miner may not hold a replica of it."}, status=404)
 
-            embedding_hash, proof = _proof_response(nonce_hex, record.embedding.tolist())
+            embedding_hash, proof = _proof_response(nonce_hex, record.embedding.tolist(), validator_hotkey_hex)
             _challenge_total += 1
             _challenge_ok += 1
             return web.json_response({"embedding_hash": embedding_hash, "proof": proof})
