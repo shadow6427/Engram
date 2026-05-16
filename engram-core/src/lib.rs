@@ -7,12 +7,13 @@
 //   cid = engram_core.generate_cid([0.1, 0.2, 0.3], {}, "v1")
 //   valid = engram_core.verify_cid(cid, [0.1, 0.2, 0.3], {}, "v1")
 //
-//   challenge = engram_core.generate_challenge("v1::abc...", 30)
+//   # validator_hotkey_hex: the validator's SR25519 public key as a 64-char hex string
+//   challenge = engram_core.generate_challenge("v1::abc...", 30, validator_hotkey_hex)
 //   response  = engram_core.generate_response(challenge, [0.1, 0.2, 0.3])
 //   ok        = engram_core.verify_response(challenge, response, [0.1, 0.2, 0.3])
 //
 // Batch usage (preferred for audit sweeps — one nonce, N CIDs, one round trip):
-//   batch    = engram_core.generate_batch_challenge(["v1::aaa", "v1::bbb"], 30)
+//   batch    = engram_core.generate_batch_challenge(["v1::aaa", "v1::bbb"], 30, validator_hotkey_hex)
 //   response = engram_core.generate_batch_response(batch, [[0.1, 0.2], [0.3, 0.4]])
 //   results  = engram_core.verify_batch_response(batch, response, [[0.1, 0.2], [0.3, 0.4]])
 //   # results: list[bool], one per CID
@@ -22,6 +23,22 @@ use std::collections::BTreeMap;
 
 mod cid;
 mod proof;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Parse a 64-char hex string into a 32-byte array.
+fn parse_hotkey_hex(hex_str: &str) -> PyResult<[u8; 32]> {
+    let bytes = hex::decode(hex_str).map_err(|e| {
+        pyo3::exceptions::PyValueError::new_err(format!(
+            "validator_hotkey must be a 64-char hex string (SR25519 pubkey): {e}"
+        ))
+    })?;
+    bytes.try_into().map_err(|_| {
+        pyo3::exceptions::PyValueError::new_err(
+            "validator_hotkey must decode to exactly 32 bytes (64 hex chars)",
+        )
+    })
+}
 
 // ── CID bindings ──────────────────────────────────────────────────────────────
 
@@ -80,6 +97,8 @@ impl Challenge {
     fn issued_at(&self) -> u64 { self.inner.issued_at }
     #[getter]
     fn expires_at(&self) -> u64 { self.inner.expires_at }
+    #[getter]
+    fn validator_hotkey_hex(&self) -> String { hex::encode(self.inner.validator_hotkey) }
 }
 
 /// Python-visible ProofResponse object
@@ -101,12 +120,23 @@ impl ProofResponse {
     fn proof(&self) -> &str { &self.inner.proof }
 }
 
+/// Generate a challenge for a single CID.
+///
+/// Args:
+///     cid_str:             CID to challenge
+///     timeout_secs:        validity window in seconds (default 30)
+///     validator_hotkey_hex: validator's SR25519 public key as a 64-char hex string
 #[pyfunction]
-#[pyo3(signature = (cid_str, timeout_secs=30))]
-fn generate_challenge(cid_str: &str, timeout_secs: u64) -> Challenge {
-    Challenge {
-        inner: proof::generate_challenge(cid_str, timeout_secs),
-    }
+#[pyo3(signature = (cid_str, timeout_secs=30, validator_hotkey_hex="0000000000000000000000000000000000000000000000000000000000000000"))]
+fn generate_challenge(
+    cid_str: &str,
+    timeout_secs: u64,
+    validator_hotkey_hex: &str,
+) -> PyResult<Challenge> {
+    let hotkey = parse_hotkey_hex(validator_hotkey_hex)?;
+    Ok(Challenge {
+        inner: proof::generate_challenge(cid_str, timeout_secs, hotkey),
+    })
 }
 
 #[pyfunction]
@@ -136,7 +166,6 @@ struct BatchChallenge {
 
 #[pymethods]
 impl BatchChallenge {
-    /// List of CIDs this challenge covers, in order.
     #[getter]
     fn cids(&self) -> Vec<String> { self.inner.cids.clone() }
     #[getter]
@@ -145,6 +174,8 @@ impl BatchChallenge {
     fn issued_at(&self) -> u64 { self.inner.issued_at }
     #[getter]
     fn expires_at(&self) -> u64 { self.inner.expires_at }
+    #[getter]
+    fn validator_hotkey_hex(&self) -> String { hex::encode(self.inner.validator_hotkey) }
 }
 
 /// Python-visible per-entry proof within a batch response.
@@ -175,7 +206,6 @@ struct BatchProofResponse {
 impl BatchProofResponse {
     #[getter]
     fn nonce_hex(&self) -> &str { &self.inner.nonce_hex }
-    /// Per-CID proof entries, in the same order as the original BatchChallenge.
     #[getter]
     fn entries(&self) -> Vec<BatchProofEntry> {
         self.inner.entries.iter().map(|e| BatchProofEntry { inner: e.clone() }).collect()
@@ -185,22 +215,24 @@ impl BatchProofResponse {
 /// Generate a batch challenge covering multiple CIDs in one round trip.
 ///
 /// Args:
-///     cids:         list of CID strings to challenge
-///     timeout_secs: how long the challenge is valid (default 30)
+///     cids:                list of CID strings to challenge
+///     timeout_secs:        validity window in seconds (default 30)
+///     validator_hotkey_hex: validator's SR25519 public key as a 64-char hex string
 #[pyfunction]
-#[pyo3(signature = (cids, timeout_secs=30))]
-fn generate_batch_challenge(cids: Vec<String>, timeout_secs: u64) -> BatchChallenge {
+#[pyo3(signature = (cids, timeout_secs=30, validator_hotkey_hex="0000000000000000000000000000000000000000000000000000000000000000"))]
+fn generate_batch_challenge(
+    cids: Vec<String>,
+    timeout_secs: u64,
+    validator_hotkey_hex: &str,
+) -> PyResult<BatchChallenge> {
+    let hotkey = parse_hotkey_hex(validator_hotkey_hex)?;
     let cid_refs: Vec<&str> = cids.iter().map(String::as_str).collect();
-    BatchChallenge {
-        inner: proof::generate_batch_challenge(&cid_refs, timeout_secs),
-    }
+    Ok(BatchChallenge {
+        inner: proof::generate_batch_challenge(&cid_refs, timeout_secs, hotkey),
+    })
 }
 
 /// Miner side: respond to a batch challenge.
-///
-/// Args:
-///     batch:      the BatchChallenge issued by the validator
-///     embeddings: list of embedding vectors, one per CID in batch.cids order
 #[pyfunction]
 fn generate_batch_response(
     batch: &BatchChallenge,
@@ -215,7 +247,6 @@ fn generate_batch_response(
 ///
 /// Returns a list[bool] — one result per CID in the original batch order.
 /// Expired challenges or nonce mismatches return all-False.
-/// Individual failures are per-entry so you can penalise at CID granularity.
 #[pyfunction]
 fn verify_batch_response(
     batch: &BatchChallenge,

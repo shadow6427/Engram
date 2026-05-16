@@ -200,7 +200,9 @@ async def run() -> None:
 
     # ── Components ────────────────────────────────────────────────────────────
     ground_truth = GroundTruthManager(path=gt_path)
-    challenge_dispatcher = ChallengeDispatcher()
+    challenge_dispatcher = ChallengeDispatcher(
+        validator_hotkey_hex=wallet.hotkey.public_key.hex() if wallet else "0" * 64
+    )
     reward_manager = RewardManager(subtensor=subtensor, wallet=wallet, netuid=netuid)
 
     for cid in ground_truth.all_cids():
