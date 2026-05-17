@@ -51,12 +51,17 @@ from engram.utils.logging import setup_logging
 
 setup_logging(os.getenv("LOG_LEVEL", "INFO"))
 
+try:
+    import engram_core
+    _RUST_PROOF_AVAILABLE = hasattr(engram_core, "generate_response_from_parts")
+except ImportError:
+    engram_core = None
+    _RUST_PROOF_AVAILABLE = False
+
 
 # ── Storage proof helpers ─────────────────────────────────────────────────────
-# Mirrors Rust proof.rs logic exactly:
-#   embedding_hash = SHA-256(little-endian f32 bytes)
-#   hmac_key       = SHA-256(validator_hotkey_bytes || nonce_bytes)
-#   proof          = HMAC-SHA256(key=hmac_key, msg=embedding_hash_hex)
+# Rust is the source of truth; Python path is a fallback for dev environments.
+# HMAC key = SHA-256(validator_hotkey_bytes || nonce_bytes) — binds proof to validator.
 
 def _hash_embedding(embedding: list[float]) -> str:
     emb_bytes = struct.pack(f"<{len(embedding)}f", *embedding)
@@ -79,6 +84,25 @@ def _proof_response(nonce_hex: str, embedding: list[float], validator_hotkey_hex
     hmac_key = _derive_hmac_key(validator_hotkey_hex, nonce)
     proof = _compute_proof(hmac_key, embedding_hash)
     return embedding_hash, proof
+
+
+def _proof_response_for_challenge(
+    cid: str,
+    nonce_hex: str,
+    expires_at: int,
+    embedding: list[float],
+    validator_hotkey_hex: str = "",
+) -> tuple[str, str]:
+    if _RUST_PROOF_AVAILABLE and engram_core is not None:
+        response = engram_core.generate_response_from_parts(
+            cid,
+            nonce_hex,
+            expires_at,
+            embedding,
+            validator_hotkey_hex or "0" * 64,
+        )
+        return response.embedding_hash, response.proof
+    return _proof_response(nonce_hex, embedding, validator_hotkey_hex)
 
 
 # ── Chat history store (SQLite) ───────────────────────────────────────────────
@@ -767,7 +791,13 @@ async def run() -> None:
             if record is None:
                 return web.json_response({"error": f"Nothing stored under that CID ({cid[:20]}…). This miner may not hold a replica of it."}, status=404)
 
-            embedding_hash, proof = _proof_response(nonce_hex, record.embedding.tolist(), validator_hotkey_hex)
+            embedding_hash, proof = _proof_response_for_challenge(
+                cid,
+                nonce_hex,
+                expires_at,
+                record.embedding.tolist(),
+                validator_hotkey_hex,
+            )
             _challenge_total += 1
             _challenge_ok += 1
             return web.json_response({"embedding_hash": embedding_hash, "proof": proof})
