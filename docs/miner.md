@@ -2,6 +2,9 @@
 
 This guide covers everything needed to run an Engram miner on testnet (subnet 450).
 
+> **Don't want to run your own server?**  
+> Use the [cloud mining mobile app](cloud-mining.md) to mine from your phone on Akash Network — no VPS required.
+
 ---
 
 ## Requirements
@@ -20,11 +23,26 @@ This guide covers everything needed to run an Engram miner on testnet (subnet 45
 
 ## Installation
 
-### 1. Clone and install
+### Option A — Docker (recommended)
 
 ```bash
-git clone https://github.com/Dipraise1/-Engram-.git
-cd -Engram-
+docker pull ghcr.io/dipraise1/engram:latest
+
+docker run -d \
+  -e NETUID=450 \
+  -e SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443 \
+  -e WALLET_NAME=engram \
+  -e WALLET_HOTKEY=miner \
+  -p 8091:8091 \
+  --name engram-miner \
+  ghcr.io/dipraise1/engram:latest
+```
+
+### Option B — From source
+
+```bash
+git clone https://github.com/Dipraise1/Engram.git
+cd Engram
 pip install -e .
 ```
 

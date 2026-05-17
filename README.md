@@ -9,6 +9,8 @@
 [![Bittensor](https://img.shields.io/badge/bittensor-subnet%20450-orange.svg)](https://bittensor.com)
 [![Status](https://img.shields.io/badge/status-testnet%20live-green.svg)](https://theengram.space)
 [![Dashboard](https://img.shields.io/badge/dashboard-theengram.space-blueviolet.svg)](https://theengram.space)
+[![Mobile](https://img.shields.io/badge/mobile-mine%20on%20phone-brightgreen.svg)](docs/cloud-mining.md)
+[![Akash](https://img.shields.io/badge/compute-akash%20network-red.svg)](https://akash.network)
 
 ---
 
@@ -19,9 +21,10 @@ Engram is a Bittensor subnet that turns text, images, and documents into **perma
 - **Content-addressed** — `v1::a3f2b1...` uniquely identifies an embedding, not a location
 - **Decentralized** — replicated across competing miners on Bittensor subnet 450
 - **Permanent** — binary files (images, PDFs) pinned to Arweave across the full stack (SDK, miner, web)
-- **Private** — X25519 hybrid encryption with differential privacy noise on stored embeddings
+- **Private** — X25519 hybrid encryption with differential privacy noise on stored embeddings; namespace isolation enforced at every endpoint
 - **Incentivized** — miners earn TAO for provably storing and serving vectors
-- **Verifiable** — HMAC challenge-response proofs ensure miners actually hold the data
+- **Verifiable** — Merkle commitment over full memory corpus + HMAC challenge-response proofs
+- **Mobile** — mine from your phone via managed Akash Network nodes, pay per hour with USDC on Base
 
 ```
          store("The transformer architecture changed everything.")
@@ -214,7 +217,27 @@ index = VectorStoreIndex.from_documents(
 
 ---
 
-## Running a Miner
+## Mine from Your Phone
+
+No server required. The Engram mobile app lets you mine on Akash Network (decentralised cloud) and pay per hour with USDC — your private key never leaves your phone.
+
+```
+App Store / Play Store  →  Generate keypair  →  Pick tier  →  Pay  →  Mining starts in ~3 min
+```
+
+| Tier | vCPU | RAM | Price |
+|------|------|-----|-------|
+| Lite | 1 | 2 GB | ~$0.10/hr |
+| Standard | 2 | 4 GB | ~$0.20/hr |
+| Pro | 4 | 8 GB | ~$0.36/hr |
+
+**How it works:** your phone is the identity and payment layer (sr25519 keypair + x402 USDC on Base). A managed miner node on Akash does the actual compute — query embedding, vector storage, Bittensor proofs. The cloud node handles all on-chain Bittensor signing; your private key is never sent anywhere.
+
+Full guide: [docs/cloud-mining.md](docs/cloud-mining.md)
+
+---
+
+## Running a Miner (self-hosted)
 
 ```bash
 # Create wallet
@@ -232,7 +255,13 @@ cp .env.example .env.miner
 ENV_FILE=.env.miner python neurons/miner.py
 ```
 
-The miner starts even if the testnet RPC is temporarily unavailable — it retries the chain connection in the background and runs chain-less until it reconnects.
+Or with Docker:
+
+```bash
+docker pull ghcr.io/dipraise1/engram:latest
+docker run -e NETUID=450 -e SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443 \
+  -p 8091:8091 ghcr.io/dipraise1/engram:latest
+```
 
 **Optional env vars:**
 
@@ -321,18 +350,27 @@ engram/
 │   ├── validator/       # Scoring, challenge, weight setting
 │   ├── sdk/             # Client (+ Arweave), LangChain, LlamaIndex, encryption
 │   ├── storage/         # arweave.py — permanent media upload (Python layer)
+│   ├── cloud/           # Cloud mining layer
+│   │   ├── session.py   # CloudMiningSession lifecycle + registry
+│   │   ├── x402.py      # x402/Dexter Cash payment gate
+│   │   ├── akash.py     # Akash Network deployment client
+│   │   └── akash_sdl.py # SDL manifest generator (lite/standard/pro)
 │   └── protocol.py      # Synapse types (IngestSynapse, QuerySynapse)
-├── engram-core/         # Rust core — CID generation + storage proofs
+├── engram-core/         # Rust core — CID generation, HMAC proofs, Merkle commitment
 ├── engram-web/          # Next.js frontend (theengram.space, Vercel)
 │   ├── app/playground/  # Text / Image / PDF ingest UI
 │   ├── app/memory/      # Memory search + AI chat
 │   ├── app/cid/[id]/    # CID lookup + Arweave proof view
-│   ├── app/api/         # Next.js API routes → miner proxy
-│   └── lib/arweave.ts   # Arweave upload utility (web layer)
-├── neurons/             # miner.py, validator.py entry points
-├── scripts/             # Setup, seeding, VPS utilities
-├── tests/               # pytest suite
-└── docs/                # Architecture, SDK, CLI, protocol reference
+│   └── app/api/         # Next.js API routes → miner proxy
+├── mobile/              # React Native app (mine from phone)
+│   ├── App.tsx          # Root navigator (Dashboard / Start / Wallet)
+│   └── src/
+│       ├── screens/     # DashboardScreen, StartMiningScreen, WalletScreen
+│       └── services/    # gateway.ts, keystore.ts, payment.ts
+├── neurons/             # miner.py, validator.py, cloud_gateway.py
+├── Dockerfile           # Miner image for Akash deployment
+├── tests/               # pytest suite (251 passing)
+└── docs/                # Architecture, SDK, CLI, protocol, cloud-mining
 ```
 
 ---
@@ -342,11 +380,14 @@ engram/
 | Guide | Description |
 |-------|-------------|
 | [docs/architecture.md](docs/architecture.md) | System design, data flows, Arweave integration |
-| [docs/miner.md](docs/miner.md) | Miner setup, configuration, systemd |
+| [docs/miner.md](docs/miner.md) | Miner setup, configuration, systemd, Docker |
 | [docs/validator.md](docs/validator.md) | Validator setup and scoring loop |
 | [docs/sdk.md](docs/sdk.md) | Python SDK full reference |
 | [docs/cli.md](docs/cli.md) | CLI command reference |
-| [docs/protocol.md](docs/protocol.md) | Wire protocol, CID spec, scoring formulas |
+| [docs/protocol.md](docs/protocol.md) | Wire protocol, CID spec, Merkle proofs, scoring |
+| [docs/cloud-mining.md](docs/cloud-mining.md) | Mine from your phone via Akash + x402 payments |
+| [FUNDING.md](FUNDING.md) | Funding priorities, sponsorship areas, and support paths |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contributor workflow and high-impact collaboration areas |
 
 ---
 
@@ -364,9 +405,10 @@ cargo test --manifest-path engram-core/Cargo.toml --no-default-features
 - **Website** — [theengram.space](https://theengram.space)
 - **Playground** — [theengram.space/playground](https://theengram.space/playground)
 - **Dashboard** — [theengram.space/dashboard](https://theengram.space/dashboard)
-- **GitHub** — [github.com/Dipraise1/-Engram-](https://github.com/Dipraise1/-Engram-)
+- **Mobile Mining** — [docs/cloud-mining.md](docs/cloud-mining.md)
+- **GitHub** — [github.com/Dipraise1/Engram](https://github.com/Dipraise1/Engram)
 - **Miner health** — `http://72.62.2.34:8091/health`
 
 ---
 
-*2026 — Permanent semantic memory for AI.*
+*2026 — Permanent semantic memory for AI. Mine from anywhere.*
