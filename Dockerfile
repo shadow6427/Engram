@@ -17,7 +17,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install Python deps first (cached layer — only rebuilds when pyproject.toml changes)
 COPY pyproject.toml README.md ./
 COPY engram/ engram/
-RUN pip install --no-cache-dir ".[node]"
+RUN pip install --no-cache-dir ".[miner]"
 
 COPY neurons/miner.py neurons/miner.py
 RUN mkdir -p data
