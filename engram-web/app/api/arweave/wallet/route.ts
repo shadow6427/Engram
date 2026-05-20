@@ -2,25 +2,46 @@
  * GET /api/arweave/wallet
  *
  * Returns the current Arweave wallet address and AR balance.
- * If ARWEAVE_KEY is not set, generates a fresh wallet and returns
- * the JWK so the operator can fund it and set the env var.
  *
- * Only callable server-side / by admins — do not expose publicly.
+ * AUTH REQUIRED — pass the ENGRAM_ADMIN_TOKEN as a Bearer token:
+ *   Authorization: Bearer <ENGRAM_ADMIN_TOKEN>
+ *
+ * Fails closed: if ENGRAM_ADMIN_TOKEN is not configured in the environment,
+ * all requests are rejected with 401 regardless of what is sent.
+ *
+ * This endpoint never generates or returns JWK private key material.
+ * To generate a wallet, run locally:
+ *   node -e "require('arweave').init({}).wallets.generate().then(k => console.log(JSON.stringify(k)))"
+ * Then set ARWEAVE_KEY in your server environment.
  */
 import { NextResponse } from "next/server";
-import { generateWallet, getWalletBalance } from "@/lib/arweave";
+import { getWalletBalance } from "@/lib/arweave";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+function isAuthorized(req: Request): boolean {
+  const adminToken = process.env.ENGRAM_ADMIN_TOKEN;
+  // Fail closed: block all access when token is not configured
+  if (!adminToken) return false;
+  const auth = req.headers.get("authorization") ?? "";
+  return auth === `Bearer ${adminToken}`;
+}
+
+export async function GET(req: Request) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json(
+      { error: "Unauthorized. Configure ENGRAM_ADMIN_TOKEN and pass it as: Authorization: Bearer <token>" },
+      { status: 401 }
+    );
+  }
+
   if (!process.env.ARWEAVE_KEY) {
-    // No wallet configured — generate one
-    const { key, address } = await generateWallet();
     return NextResponse.json({
       status: "no_wallet",
-      message: "No ARWEAVE_KEY set. Save the key below as your ARWEAVE_KEY env var, then fund the address with AR.",
-      address,
-      key, // JWK — treat as a private key, store securely
+      message:
+        "No ARWEAVE_KEY configured. Generate a wallet locally and set it as an env var — " +
+        "never share the key or request it over HTTP. " +
+        "Generate: node -e \"require('arweave').init({}).wallets.generate().then(k => console.log(JSON.stringify(k)))\"",
     });
   }
 
