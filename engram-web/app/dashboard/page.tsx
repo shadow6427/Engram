@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowLeft, RefreshCw, Search, ChevronRight, ExternalLink } from "lucide-react";
+import NetworkVisualizer from "@/components/NetworkVisualizer";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -456,6 +457,9 @@ export default function Dashboard() {
           </div>
           <QueryPlayground />
         </div>
+
+        {/* Network visualizer */}
+        <NetworkVisualizer miners={miners} stats={stats} />
 
         {/* Miner leaderboard */}
         <MinerTable miners={miners} loading={loading} />
