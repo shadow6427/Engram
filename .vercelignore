@@ -1,0 +1,9 @@
+node_modules
+.venv
+__pycache__
+*.pyc
+.next
+engram-web/.next
+engram-core/target
+.git
+data/
