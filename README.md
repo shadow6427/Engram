@@ -254,6 +254,9 @@ Full guide: [docs/cloud-mining.md](docs/cloud-mining.md)
 
 ## Running a Miner (self-hosted)
 
+> **On Windows?** Use the one-script Docker setup — no Python/Rust install needed:
+> see [docs/miner-windows.md](docs/miner-windows.md).
+
 ```bash
 # Create wallet
 btcli wallet new_coldkey --wallet.name engram
@@ -270,13 +273,15 @@ cp .env.example .env.miner
 ENV_FILE=.env.miner python neurons/miner.py
 ```
 
-Or with Docker:
+Or with Docker (builds the local-embedder image that matches the validator):
 
 ```bash
-docker pull ghcr.io/dipraise1/engram:latest
-docker run -e NETUID=450 -e SUBTENSOR_ENDPOINT=wss://test.finney.opentensor.ai:443 \
-  -p 8091:8091 ghcr.io/dipraise1/engram:latest
+ENGRAM_WALLET_DIR="$HOME/.bittensor" \
+  docker compose -f docker-compose.windows.yml up -d --build miner
 ```
+
+The compose file is named `windows` but works on Linux/macOS too. It mounts your
+wallet from `$HOME/.bittensor`, persists the FAISS index, and exposes port 8091.
 
 **Optional env vars:**
 

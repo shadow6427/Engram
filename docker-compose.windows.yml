@@ -1,0 +1,39 @@
+# Engram Miner — Windows / Docker Desktop compose file
+#
+# Self-contained: run it on its own, no other compose file needed.
+#   docker compose -f docker-compose.windows.yml up -d --build
+#
+# Wallet keys live on the HOST (so you own them and they survive container
+# rebuilds). ENGRAM_WALLET_DIR points at where btcli stores wallets:
+#   Windows : %USERPROFILE%\.bittensor   (set by scripts\setup_miner.ps1)
+#   default : ./wallets                  (created next to this file)
+#
+# The miner reads all config from .env.miner — copy .env.miner.example first,
+# or let scripts\setup_miner.ps1 generate it for you.
+
+services:
+  miner:
+    build:
+      context: .
+      dockerfile: docker/miner-local.Dockerfile
+    image: engram-miner:local
+    container_name: engram-miner
+    ports:
+      - "8091:8091"                       # axon — must be reachable by validators
+    env_file: .env.miner
+    environment:
+      - VECTOR_STORE_BACKEND=faiss        # no extra DB container needed
+      - FAISS_INDEX_PATH=/app/data/miner.index
+    volumes:
+      - "${ENGRAM_WALLET_DIR:-./wallets}:/root/.bittensor"   # wallet keys (host-owned)
+      - miner_data:/app/data                                 # FAISS index + ground truth
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8091/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+volumes:
+  miner_data:
