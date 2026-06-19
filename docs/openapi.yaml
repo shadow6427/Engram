@@ -1,0 +1,143 @@
+openapi: 3.0.0
+info:
+  title: Engram Miner API
+  version: 1.0.0
+  description: OpenAPI specification for the Engram Miner HTTP API.
+servers:
+  - url: http://localhost:8091
+    description: Default Miner Address
+components:
+  securitySchemes:
+    bittensor_auth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Bittensor hotkey signature (usually passed in body, represented as auth for docs)
+paths:
+  /IngestSynapse:
+    post:
+      summary: Ingest a new memory/embedding
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                raw_embedding:
+                  type: array
+                  items:
+                    type: number
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Successfully ingested
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cid:
+                    type: string
+                  error:
+                    type: string
+  /QuerySynapse:
+    post:
+      summary: Query the vector store
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                query_embedding:
+                  type: array
+                  items:
+                    type: number
+                namespace:
+                  type: string
+                filter:
+                  type: object
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                  latency_ms:
+                    type: number
+                  error:
+                    type: string
+  /ChallengeSynapse:
+    post:
+      summary: Validator challenge endpoint for storage proofs
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cid:
+                  type: string
+                nonce_hex:
+                  type: string
+                expires_at:
+                  type: integer
+                validator_hotkey_hex:
+                  type: string
+      responses:
+        '200':
+          description: Proof generated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  embedding_hash:
+                    type: string
+                  proof:
+                    type: string
+  /health:
+    get:
+      summary: Liveness probe
+      responses:
+        '200':
+          description: OK
+  /stats:
+    get:
+      summary: Miner statistics
+      responses:
+        '200':
+          description: Statistics object
+  /retrieve/{cid}:
+    get:
+      summary: Retrieve a public memory
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Memory metadata
+    delete:
+      summary: Delete a memory
+      parameters:
+        - in: path
+          name: cid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Deleted successfully
