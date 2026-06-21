@@ -1,446 +1,544 @@
 openapi: 3.0.3
 info:
   title: Engram Miner API
-  version: "1.0.0"
-  description: |
-    Plain JSON HTTP API for an Engram Miner Neuron. 
-    Validators and clients communicate with the miner via these endpoints to store and retrieve vector embeddings.
-    
-    ### Authentication
-    Requests that require authentication use a body-based signature scheme. The caller must add the following fields to the JSON payload:
-    
-    - `hotkey`: The SS58 address of the signing keypair.
-    - `nonce`: A UNIX timestamp in milliseconds (provides replay protection within a ±30s window).
-    - `signature`: A hex sr25519 signature over the canonical message.
-    
-    **Canonical Message Format**:
-    The canonical message (UTF-8 bytes) to sign is:
-    `{nonce}:{endpoint}:{body_hash}`
-    
-    Where `body_hash` is the SHA-256 hex digest of the JSON-serialised *payload* fields (i.e. everything except `hotkey`, `nonce`, and `signature`), sorted by key.
-    
+  version: 1.0.0
+  description: Auto-generated OpenAPI spec for Engram Miner.
 servers:
-  - url: http://localhost:8091
-    description: Local Miner Node
-
+- url: http://localhost:8091
+  description: Local Miner Node
 paths:
   /IngestSynapse:
     post:
-      summary: Ingest Synapse
-      description: Store an embedding. Returns a CID. Requires signature authentication.
+      summary: POST /IngestSynapse
+      responses:
+        '200':
+          description: Success
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/IngestSynapseRequest'
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cid:
-                    type: string
-                    description: The content identifier for the stored embedding.
-                  error:
-                    type: string
-                    nullable: true
-        "401":
-          description: Unauthorized
-        "429":
-          description: Rate Limited
-        "500":
-          description: Internal Server Error
-          
+              $ref: '#/components/schemas/IngestSynapse'
   /QuerySynapse:
     post:
-      summary: Query Synapse
-      description: Perform Approximate Nearest-Neighbor (ANN) search to retrieve top-K results. Requires signature authentication.
+      summary: POST /QuerySynapse
+      responses:
+        '200':
+          description: Success
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/QuerySynapseRequest'
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/QuerySynapseResponse'
-        "401":
-          description: Unauthorized
-        "429":
-          description: Rate Limited
-        "500":
-          description: Internal Server Error
-
+              $ref: '#/components/schemas/QuerySynapse'
   /ChallengeSynapse:
     post:
-      summary: Challenge Synapse
-      description: Validator challenges the miner to prove it holds a CID.
+      summary: POST /ChallengeSynapse
+      responses:
+        '200':
+          description: Success
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/ChallengeSynapseRequest'
-      responses:
-        "200":
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChallengeSynapseResponse'
-
-  /KeyShareSynapse:
+              $ref: '#/components/schemas/ChallengeSynapse'
+  /namespace:
     post:
-      summary: Store a Shamir Key Share
-      description: Client deposits one Shamir key share with a miner for threshold decryption. Caller must prove namespace ownership via `namespace_sig`.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KeyShareSynapseRequest'
+      summary: POST /namespace
       responses:
-        "200":
+        '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  stored:
-                    type: boolean
-                  error:
-                    type: string
-                    nullable: true
-
-  /KeyShareRetrieve:
+  /AttestNamespace:
     post:
-      summary: Retrieve a Shamir Key Share
-      description: Client retrieves its key share from a miner. Requires proof of namespace ownership.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/KeyShareRetrieveRequest'
+      summary: POST /AttestNamespace
       responses:
-        "200":
+        '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/KeyShareRetrieveResponse'
-
-  /RepairSynapse:
+  /attestation/{namespace}:
+    get:
+      summary: GET /attestation/{namespace}
+      responses:
+        '200':
+          description: Success
+  /chat-history/{user_id}:
+    get:
+      summary: GET /chat-history/{user_id}
+      responses:
+        '200':
+          description: Success
+  /chat-history:
     post:
-      summary: Repair Synapse
-      description: Return the full embedding for a CID so the validator can copy it to under-replicated miners. Requires network auth.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                cid:
-                  type: string
-              required:
-                - cid
+      summary: POST /chat-history
       responses:
-        "200":
+        '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cid:
-                    type: string
-                  embedding:
-                    type: array
-                    items:
-                      type: number
-                  metadata:
-                    type: object
-
+  /conversations/{user_id}:
+    get:
+      summary: GET /conversations/{user_id}
+      responses:
+        '200':
+          description: Success
+  /conversations:
+    post:
+      summary: POST /conversations
+      responses:
+        '200':
+          description: Success
+  /conversations/{conv_id}:
+    patch:
+      summary: PATCH /conversations/{conv_id}
+      responses:
+        '200':
+          description: Success
+    delete:
+      summary: DELETE /conversations/{conv_id}
+      responses:
+        '200':
+          description: Success
   /retrieve/{cid}:
     get:
-      summary: Retrieve Metadata
-      description: Return stored metadata for a CID. Public memories are freely readable. Private namespace memories return 404.
-      parameters:
-        - name: cid
-          in: path
-          required: true
-          schema:
-            type: string
+      summary: GET /retrieve/{cid}
       responses:
-        "200":
+        '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  cid:
-                    type: string
-                  metadata:
-                    type: object
-        "404":
-          description: Not Found
     delete:
-      summary: Delete a stored memory
-      description: Permanently remove a stored memory. Network auth required in JSON body.
-      parameters:
-        - name: cid
-          in: path
-          required: true
-          schema:
-            type: string
+      summary: DELETE /retrieve/{cid}
+      responses:
+        '200':
+          description: Success
+  /RepairSynapse:
+    post:
+      summary: POST /RepairSynapse
+      responses:
+        '200':
+          description: Success
+  /KeyShareSynapse:
+    post:
+      summary: POST /KeyShareSynapse
+      responses:
+        '200':
+          description: Success
       requestBody:
-        required: false
+        required: true
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                hotkey:
-                  type: string
-                nonce:
-                  type: integer
-                signature:
-                  type: string
-                namespace_hotkey:
-                  type: string
-                namespace_sig:
-                  type: string
-                namespace_timestamp_ms:
-                  type: integer
+              $ref: '#/components/schemas/KeyShareSynapse'
+  /KeyShareRetrieve:
+    post:
+      summary: POST /KeyShareRetrieve
       responses:
-        "200":
+        '200':
           description: Success
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deleted:
-                    type: boolean
-                  cid:
-                    type: string
-
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyShareRetrieve'
+  /list:
+    post:
+      summary: POST /list
+      responses:
+        '200':
+          description: Success
   /health:
     get:
-      summary: Health Check
-      description: Liveness probe.
+      summary: GET /health
       responses:
-        "200":
-          description: Healthy
-
+        '200':
+          description: Success
+  /stats:
+    get:
+      summary: GET /stats
+      responses:
+        '200':
+          description: Success
+  /metagraph:
+    get:
+      summary: GET /metagraph
+      responses:
+        '200':
+          description: Success
+  /metrics:
+    get:
+      summary: GET /metrics
+      responses:
+        '200':
+          description: Success
+  /wallet-stats:
+    get:
+      summary: GET /wallet-stats
+      responses:
+        '200':
+          description: Success
+  /wallet-stats/{hotkey}:
+    get:
+      summary: GET /wallet-stats/{hotkey}
+      responses:
+        '200':
+          description: Success
+  /commitment:
+    get:
+      summary: GET /commitment
+      responses:
+        '200':
+          description: Success
+  /prove-memory:
+    post:
+      summary: POST /prove-memory
+      responses:
+        '200':
+          description: Success
 components:
   schemas:
-    AuthFields:
-      type: object
+    IngestSynapse:
+      description: "Sent by client/validator to a miner to store an embedding.\n\n\
+        Request:  text OR raw_embedding (one must be provided)\nResponse: cid (set\
+        \ by miner on success)\n\nPrivate collections \u2014 two auth modes (prefer\
+        \ sig-based):\n  Sig-based  (secure):  namespace + namespace_hotkey + namespace_sig\
+        \ + namespace_timestamp_ms\n  Key-based  (legacy):  namespace + namespace_key"
       properties:
-        hotkey:
+        text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Raw text to embed and store. Mutually exclusive with raw_embedding.
+          title: Text
+        raw_embedding:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          default: null
+          description: Pre-computed embedding vector. Skips the embedding step on
+            the miner.
+          title: Raw Embedding
+        metadata:
+          additionalProperties: true
+          description: Arbitrary key-value metadata stored alongside the vector.
+          title: Metadata
+          type: object
+        model_version:
+          default: v1
+          description: Subnet model epoch version for CID generation.
+          title: Model Version
           type: string
-          description: SS58 address of the signing keypair.
-        nonce:
-          type: integer
-          description: Unix timestamp in milliseconds.
-        signature:
-          type: string
-          description: Hex sr25519 signature over the canonical message.
-
-    IngestSynapseRequest:
-      allOf:
-        - $ref: '#/components/schemas/AuthFields'
-        - type: object
-          properties:
-            text:
-              type: string
-              nullable: true
-              description: Raw text to embed and store. Mutually exclusive with raw_embedding.
-            raw_embedding:
-              type: array
-              items:
-                type: number
-              nullable: true
-              description: Pre-computed embedding vector.
-            metadata:
-              type: object
-              additionalProperties: true
-            model_version:
-              type: string
-              default: "v1"
-            namespace:
-              type: string
-              nullable: true
-            namespace_hotkey:
-              type: string
-              nullable: true
-            namespace_sig:
-              type: string
-              nullable: true
-            namespace_timestamp_ms:
-              type: integer
-              nullable: true
-            namespace_key:
-              type: string
-              nullable: true
-              description: "[Deprecated] Secret key for the namespace."
-
-    QuerySynapseRequest:
-      allOf:
-        - $ref: '#/components/schemas/AuthFields'
-        - type: object
-          properties:
-            query_text:
-              type: string
-              nullable: true
-            query_vector:
-              type: array
-              items:
-                type: number
-              nullable: true
-            top_k:
-              type: integer
-              default: 10
-              minimum: 1
-              maximum: 100
-            namespace:
-              type: string
-              nullable: true
-            namespace_hotkey:
-              type: string
-              nullable: true
-            namespace_sig:
-              type: string
-              nullable: true
-            namespace_timestamp_ms:
-              type: integer
-              nullable: true
-            filter:
-              type: object
-              description: Metadata filter (exact match).
-
-    QuerySynapseResponse:
-      type: object
-      properties:
-        results:
-          type: array
-          items:
-            type: object
-            properties:
-              cid:
-                type: string
-              score:
-                type: number
-              metadata:
-                type: object
-                additionalProperties: true
-        latency_ms:
-          type: number
-          nullable: true
+        namespace:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Private collection name.
+          title: Namespace
+        namespace_hotkey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Bittensor SS58 hotkey that owns this namespace.
+          title: Namespace Hotkey
+        namespace_sig:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: "sr25519 hex signature over 'engram-ns:{namespace}:{namespace_timestamp_ms}'.\
+            \ Replaces namespace_key \u2014 key never travels over the wire."
+          title: Namespace Sig
+        namespace_timestamp_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          description: "Unix ms timestamp for namespace_sig replay prevention (\xB1\
+            60s window)."
+          title: Namespace Timestamp Ms
+        namespace_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: '[Deprecated] Secret key for the namespace. Use namespace_sig
+            instead.'
+          title: Namespace Key
+        cid:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Content identifier returned by the miner.
+          title: Cid
         error:
-          type: string
-          nullable: true
-
-    ChallengeSynapseRequest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: Error message if ingest failed.
+          title: Error
+      title: IngestSynapse
       type: object
+    QuerySynapse:
+      description: 'Sent by validator/client to miners for approximate nearest-neighbor
+        search.
+
+
+        Request:  query_text OR query_vector, top_k
+
+        Response: results (list of CID + score + metadata)'
+      properties:
+        query_text:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Query Text
+        query_vector:
+          anyOf:
+          - items:
+              type: number
+            type: array
+          - type: 'null'
+          default: null
+          title: Query Vector
+        top_k:
+          default: 10
+          maximum: 100
+          minimum: 1
+          title: Top K
+          type: integer
+        namespace:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace
+        namespace_hotkey:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace Hotkey
+        namespace_sig:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace Sig
+        namespace_timestamp_ms:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Namespace Timestamp Ms
+        namespace_key:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace Key
+        results:
+          description: List of {cid, score, metadata} dicts ordered by descending
+            similarity.
+          items:
+            additionalProperties: true
+            type: object
+          title: Results
+          type: array
+        latency_ms:
+          anyOf:
+          - type: number
+          - type: 'null'
+          default: null
+          description: Miner-reported query latency in milliseconds.
+          title: Latency Ms
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Error
+      title: QuerySynapse
+      type: object
+    ChallengeSynapse:
+      description: 'Validator issues a storage proof challenge to a miner.
+
+
+        Request:  cid + nonce_hex + expires_at
+
+        Response: embedding_hash + proof (HMAC)
+
+
+        The Rust engram_core module handles challenge generation and verification.'
       properties:
         cid:
+          description: CID the miner is being challenged to prove storage of.
+          title: Cid
           type: string
         nonce_hex:
+          description: 32-byte random nonce as hex string.
+          title: Nonce Hex
           type: string
         expires_at:
+          description: Unix timestamp after which the proof is invalid.
+          title: Expires At
           type: integer
-      required:
-        - cid
-        - nonce_hex
-        - expires_at
-
-    ChallengeSynapseResponse:
-      type: object
-      properties:
         embedding_hash:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: SHA-256 of the stored embedding bytes (hex).
+          title: Embedding Hash
         proof:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          description: HMAC-SHA256(nonce || embedding_hash) proving possession.
+          title: Proof
         error:
-          type: string
-          nullable: true
-
-    KeyShareSynapseRequest:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Error
+      required:
+      - cid
+      - nonce_hex
+      - expires_at
+      title: ChallengeSynapse
       type: object
+    KeyShareSynapse:
+      description: "Client deposits one Shamir key share with a miner for threshold\
+        \ decryption.\n\nThe miner stores the share associated with the namespace.\
+        \ It cannot reconstruct\nthe full key alone \u2014 that requires K miners\
+        \ to cooperate at retrieval time.\n\nAuth: namespace_hotkey + namespace_sig\
+        \ + namespace_timestamp_ms (sig-based only)."
       properties:
         namespace:
+          description: Namespace this share belongs to.
+          title: Namespace
           type: string
         share_index:
+          description: 1-based share index (1..total).
+          title: Share Index
           type: integer
         share_hex:
+          description: Hex-encoded share bytes.
+          title: Share Hex
           type: string
         threshold:
+          description: Minimum shares needed to reconstruct (k).
+          title: Threshold
           type: integer
         total:
+          description: Total shares created (n).
+          title: Total
           type: integer
         namespace_hotkey:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace Hotkey
         namespace_sig:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace Sig
         namespace_timestamp_ms:
-          type: integer
-          nullable: true
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Namespace Timestamp Ms
+        stored:
+          default: false
+          title: Stored
+          type: boolean
+        error:
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Error
       required:
-        - namespace
-        - share_index
-        - share_hex
-        - threshold
-        - total
-
-    KeyShareRetrieveRequest:
+      - namespace
+      - share_index
+      - share_hex
+      - threshold
+      - total
+      title: KeyShareSynapse
       type: object
+    KeyShareRetrieve:
+      description: 'Client retrieves its key share from a miner.
+
+
+        The miner returns the share only after verifying namespace ownership.
+
+        The client collects K shares from K different miners and reconstructs locally.
+
+
+        Auth: namespace_hotkey + namespace_sig + namespace_timestamp_ms.'
       properties:
         namespace:
+          description: Namespace to retrieve the share for.
+          title: Namespace
           type: string
         namespace_hotkey:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace Hotkey
         namespace_sig:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Namespace Sig
         namespace_timestamp_ms:
-          type: integer
-          nullable: true
-      required:
-        - namespace
-
-    KeyShareRetrieveResponse:
-      type: object
-      properties:
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Namespace Timestamp Ms
         share_index:
-          type: integer
-          nullable: true
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Share Index
         share_hex:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Share Hex
         threshold:
-          type: integer
-          nullable: true
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Threshold
         total:
-          type: integer
-          nullable: true
+          anyOf:
+          - type: integer
+          - type: 'null'
+          default: null
+          title: Total
         error:
-          type: string
-          nullable: true
+          anyOf:
+          - type: string
+          - type: 'null'
+          default: null
+          title: Error
+      required:
+      - namespace
+      title: KeyShareRetrieve
+      type: object
