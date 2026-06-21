@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: Engram Miner API
+  version: "1.0.0"
+  description: |
+    Plain JSON HTTP API for an Engram Miner Neuron. 
+    Validators and clients communicate with the miner via these endpoints to store and retrieve vector embeddings.
+    
+    ### Authentication
+    Requests that require authentication use a body-based signature scheme. The caller must add the following fields to the JSON payload:
+    
+    - `hotkey`: The SS58 address of the signing keypair.
+    - `nonce`: A UNIX timestamp in milliseconds (provides replay protection within a ±30s window).
+    - `signature`: A hex sr25519 signature over the canonical message.
+    
+    **Canonical Message Format**:
+    The canonical message (UTF-8 bytes) to sign is:
+    `{nonce}:{endpoint}:{body_hash}`
+    
+    Where `body_hash` is the SHA-256 hex digest of the JSON-serialised *payload* fields (i.e. everything except `hotkey`, `nonce`, and `signature`), sorted by key.
+    
+servers:
+  - url: http://localhost:8091
+    description: Local Miner Node
+
+paths:
+  /IngestSynapse:
+    post:
+      summary: Ingest Synapse
+      description: Store an embedding. Returns a CID. Requires signature authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IngestSynapseRequest'
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cid:
+                    type: string
+                    description: The content identifier for the stored embedding.
+                  error:
+                    type: string
+                    nullable: true
+        "401":
+          description: Unauthorized
+        "429":
+          description: Rate Limited
+        "500":
+          description: Internal Server Error
+          
+  /QuerySynapse:
+    post:
+      summary: Query Synapse
+      description: Perform Approximate Nearest-Neighbor (ANN) search to retrieve top-K results. Requires signature authentication.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QuerySynapseRequest'
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QuerySynapseResponse'
+        "401":
+          description: Unauthorized
+        "429":
+          description: Rate Limited
+        "500":
+          description: Internal Server Error
+
+  /ChallengeSynapse:
+    post:
+      summary: Challenge Synapse
+      description: Validator challenges the miner to prove it holds a CID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChallengeSynapseRequest'
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChallengeSynapseResponse'
+
+  /KeyShareSynapse:
+    post:
+      summary: Store a Shamir Key Share
+      description: Client deposits one Shamir key share with a miner for threshold decryption. Caller must prove namespace ownership via `namespace_sig`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyShareSynapseRequest'
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stored:
+                    type: boolean
+                  error:
+                    type: string
+                    nullable: true
+
+  /KeyShareRetrieve:
+    post:
+      summary: Retrieve a Shamir Key Share
+      description: Client retrieves its key share from a miner. Requires proof of namespace ownership.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/KeyShareRetrieveRequest'
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/KeyShareRetrieveResponse'
+
+  /RepairSynapse:
+    post:
+      summary: Repair Synapse
+      description: Return the full embedding for a CID so the validator can copy it to under-replicated miners. Requires network auth.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                cid:
+                  type: string
+              required:
+                - cid
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cid:
+                    type: string
+                  embedding:
+                    type: array
+                    items:
+                      type: number
+                  metadata:
+                    type: object
+
+  /retrieve/{cid}:
+    get:
+      summary: Retrieve Metadata
+      description: Return stored metadata for a CID. Public memories are freely readable. Private namespace memories return 404.
+      parameters:
+        - name: cid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  cid:
+                    type: string
+                  metadata:
+                    type: object
+        "404":
+          description: Not Found
+    delete:
+      summary: Delete a stored memory
+      description: Permanently remove a stored memory. Network auth required in JSON body.
+      parameters:
+        - name: cid
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                hotkey:
+                  type: string
+                nonce:
+                  type: integer
+                signature:
+                  type: string
+                namespace_hotkey:
+                  type: string
+                namespace_sig:
+                  type: string
+                namespace_timestamp_ms:
+                  type: integer
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: boolean
+                  cid:
+                    type: string
+
+  /health:
+    get:
+      summary: Health Check
+      description: Liveness probe.
+      responses:
+        "200":
+          description: Healthy
+
+components:
+  schemas:
+    AuthFields:
+      type: object
+      properties:
+        hotkey:
+          type: string
+          description: SS58 address of the signing keypair.
+        nonce:
+          type: integer
+          description: Unix timestamp in milliseconds.
+        signature:
+          type: string
+          description: Hex sr25519 signature over the canonical message.
+
+    IngestSynapseRequest:
+      allOf:
+        - $ref: '#/components/schemas/AuthFields'
+        - type: object
+          properties:
+            text:
+              type: string
+              nullable: true
+              description: Raw text to embed and store. Mutually exclusive with raw_embedding.
+            raw_embedding:
+              type: array
+              items:
+                type: number
+              nullable: true
+              description: Pre-computed embedding vector.
+            metadata:
+              type: object
+              additionalProperties: true
+            model_version:
+              type: string
+              default: "v1"
+            namespace:
+              type: string
+              nullable: true
+            namespace_hotkey:
+              type: string
+              nullable: true
+            namespace_sig:
+              type: string
+              nullable: true
+            namespace_timestamp_ms:
+              type: integer
+              nullable: true
+            namespace_key:
+              type: string
+              nullable: true
+              description: "[Deprecated] Secret key for the namespace."
+
+    QuerySynapseRequest:
+      allOf:
+        - $ref: '#/components/schemas/AuthFields'
+        - type: object
+          properties:
+            query_text:
+              type: string
+              nullable: true
+            query_vector:
+              type: array
+              items:
+                type: number
+              nullable: true
+            top_k:
+              type: integer
+              default: 10
+              minimum: 1
+              maximum: 100
+            namespace:
+              type: string
+              nullable: true
+            namespace_hotkey:
+              type: string
+              nullable: true
+            namespace_sig:
+              type: string
+              nullable: true
+            namespace_timestamp_ms:
+              type: integer
+              nullable: true
+            filter:
+              type: object
+              description: Metadata filter (exact match).
+
+    QuerySynapseResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              cid:
+                type: string
+              score:
+                type: number
+              metadata:
+                type: object
+                additionalProperties: true
+        latency_ms:
+          type: number
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    ChallengeSynapseRequest:
+      type: object
+      properties:
+        cid:
+          type: string
+        nonce_hex:
+          type: string
+        expires_at:
+          type: integer
+      required:
+        - cid
+        - nonce_hex
+        - expires_at
+
+    ChallengeSynapseResponse:
+      type: object
+      properties:
+        embedding_hash:
+          type: string
+          nullable: true
+        proof:
+          type: string
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    KeyShareSynapseRequest:
+      type: object
+      properties:
+        namespace:
+          type: string
+        share_index:
+          type: integer
+        share_hex:
+          type: string
+        threshold:
+          type: integer
+        total:
+          type: integer
+        namespace_hotkey:
+          type: string
+          nullable: true
+        namespace_sig:
+          type: string
+          nullable: true
+        namespace_timestamp_ms:
+          type: integer
+          nullable: true
+      required:
+        - namespace
+        - share_index
+        - share_hex
+        - threshold
+        - total
+
+    KeyShareRetrieveRequest:
+      type: object
+      properties:
+        namespace:
+          type: string
+        namespace_hotkey:
+          type: string
+          nullable: true
+        namespace_sig:
+          type: string
+          nullable: true
+        namespace_timestamp_ms:
+          type: integer
+          nullable: true
+      required:
+        - namespace
+
+    KeyShareRetrieveResponse:
+      type: object
+      properties:
+        share_index:
+          type: integer
+          nullable: true
+        share_hex:
+          type: string
+          nullable: true
+        threshold:
+          type: integer
+          nullable: true
+        total:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
