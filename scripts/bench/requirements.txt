@@ -1,0 +1,8 @@
+datasets>=2.16.0
+pinecone-client>=3.0.0
+weaviate-client>=4.4.0
+psycopg2-binary>=2.9.9
+pgvector>=0.2.4
+numpy>=1.26.0
+tqdm>=4.66.0
+sentence-transformers>=2.3.1
